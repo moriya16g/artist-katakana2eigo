@@ -1,0 +1,658 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1D2340">
+<title>アーティスト名 カタカナ→英語</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #EEF0F2;
+  --surface: #FFFFFF;
+  --ink: #1D2340;
+  --muted: #5F667C;
+  --line: #D5D9E1;
+  --focus: #3B5BDB;
+  --ok: #24705F;   --ok-bg: #E1F0EA;
+  --warn: #93600F; --warn-bg: #F6EBD7;
+  --miss: #A3354D; --miss-bg: #F6E2E7;
+  --jp: "Zen Kaku Gothic New", "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
+  --en: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15182A;
+    --surface: #1D2136;
+    --ink: #E6E8F1;
+    --muted: #9EA4BA;
+    --line: #30354F;
+    --focus: #8FA6FF;
+    --ok: #74C9B3;   --ok-bg: #1B342F;
+    --warn: #E5B468; --warn-bg: #3A2F1B;
+    --miss: #F08EA3; --miss-bg: #3C212A;
+  }
+}
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; scroll-padding-top: env(safe-area-inset-top, 0px); }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 400 16px/1.7 var(--jp);
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+}
+main { max-width: 640px; margin: 0 auto; padding: 20px 16px 72px; }
+
+/* 見出し：カタカナと英語表記の対 */
+.masthead { padding: 16px 0 26px; }
+.pair { display: flex; flex-direction: column; gap: 2px; margin-bottom: 20px; }
+.pair .k { font-size: 14px; letter-spacing: .14em; color: var(--muted); }
+.pair .e { font-family: var(--en); font-weight: 600; font-size: clamp(34px, 10vw, 50px); line-height: 1.05; letter-spacing: -.015em; }
+h1 { font-size: 18px; font-weight: 700; line-height: 1.5; margin: 0 0 6px; }
+.lead { margin: 0; color: var(--muted); font-size: 14px; max-width: 34em; }
+
+section { border-top: 1px solid var(--line); padding: 22px 0 10px; }
+h2 { display: flex; align-items: baseline; gap: 10px; font-size: 16px; font-weight: 700; margin: 0 0 12px; }
+h2 .n { font-family: var(--en); font-weight: 400; font-size: 24px; line-height: 1; color: var(--muted); min-width: 1ch; }
+.info { font-size: 14px; color: var(--muted); margin: 10px 0 0; }
+
+textarea {
+  display: block; width: 100%; min-height: 9.5em; resize: vertical;
+  padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--surface); color: var(--ink); font: 15px/1.6 var(--jp);
+}
+#output { font: 13px/1.5 var(--mono); min-height: 12em; margin-top: 10px; }
+
+.actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 14px; }
+button, .filebtn {
+  appearance: none; position: relative; overflow: hidden;
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 46px; padding: 0 18px; border-radius: 10px;
+  border: 1px solid var(--ink); background: transparent; color: var(--ink);
+  font: 500 15px/1.2 var(--jp); cursor: pointer; text-align: center;
+}
+button.primary { background: var(--ink); color: var(--bg); }
+button:disabled { opacity: .4; cursor: not-allowed; }
+.filebtn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+button:focus-visible, textarea:focus-visible, input[type=checkbox]:focus-visible, .filebtn:focus-within {
+  outline: 3px solid var(--focus); outline-offset: 2px;
+}
+.opt { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--muted); margin-top: 12px; }
+input[type=checkbox] { width: 22px; height: 22px; margin: 0; accent-color: var(--ink); }
+
+/* 進捗（結果を見ながらでも見えるよう上に貼り付く） */
+.status {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+  background: var(--bg); border-top: 1px solid var(--line); padding: 12px 0 14px;
+}
+.status p { margin: 0 0 8px; font-size: 14px; }
+.track { height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; }
+.track i { display: block; width: 0; height: 100%; background: var(--ink); transition: width .3s ease; }
+
+.filters { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
+.filters button { min-height: 38px; padding: 0 14px; border-color: var(--line); border-radius: 999px; font-size: 14px; white-space: nowrap; }
+.filters button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+.bulk { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 6px 0 4px; }
+.bulk button { min-height: 38px; padding: 0; border: 0; font-size: 14px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
+
+.list { list-style: none; margin: 0; padding: 0; }
+.row { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: start; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.row .pick { margin-top: 3px; }
+.names { min-width: 0; }
+.kana { font-size: 14px; line-height: 1.5; color: var(--muted); overflow-wrap: anywhere; }
+.en {
+  display: block; width: 100%; margin-top: 2px; padding: 3px 0 4px;
+  border: 0; border-bottom: 1px dashed var(--line); border-radius: 0;
+  background: transparent; color: var(--ink); font: 600 20px/1.35 var(--en);
+}
+.en::placeholder { color: var(--muted); font-weight: 400; font-style: italic; opacity: .75; }
+.en:focus { outline: none; border-bottom: 2px solid var(--focus); padding-bottom: 3px; }
+.note { font-size: 13px; line-height: 1.5; color: var(--muted); margin-top: 5px; }
+.badge { font-size: 12px; font-weight: 500; line-height: 1.4; padding: 3px 8px; border-radius: 6px; white-space: nowrap; margin-top: 1px; background: var(--line); color: var(--ink); }
+.row[data-state="match"] .badge { background: var(--ok-bg); color: var(--ok); }
+.row[data-state="guess"] .badge { background: var(--warn-bg); color: var(--warn); }
+.row[data-state="none"] .badge, .row[data-state="error"] .badge { background: var(--miss-bg); color: var(--miss); }
+.row[data-state="pending"] .badge { background: transparent; color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
+.row[data-state="same"] .badge { background: transparent; color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
+.empty { color: var(--muted); font-size: 14px; padding: 8px 0; }
+
+footer { border-top: 1px solid var(--line); padding-top: 18px; font-size: 13px; color: var(--muted); }
+footer p { margin: 0 0 10px; }
+footer button { min-height: 40px; font-size: 14px; border-color: var(--line); color: var(--muted); }
+
+@media (prefers-reduced-motion: reduce) { .track i { transition: none; } }
+</style>
+</head>
+<body>
+<main>
+  <header class="masthead">
+    <div class="pair" aria-hidden="true">
+      <span class="k">ザ・ローリング・ストーンズ</span>
+      <span class="e">The Rolling Stones</span>
+    </div>
+    <h1>カタカナのアーティスト名を英語表記に変換</h1>
+    <p class="lead">Apple Musicで日本語表記を検索し、同じアーティストの英語表記を取得します。結果は置換ルールのJSONとして書き出せます。</p>
+  </header>
+
+  <section aria-labelledby="h-in">
+    <h2 id="h-in"><span class="n">1</span>アーティスト名のリストを入れる</h2>
+    <textarea id="input" aria-label="アーティスト名のリスト" placeholder="1行に1アーティスト&#10;ザ・ローリング・ストーンズ&#10;レディオヘッド"></textarea>
+    <label class="opt"><input type="checkbox" id="onlyKana" checked>カタカナを含む行だけ使う（重複は自動で除きます）</label>
+    <div class="actions">
+      <button id="load" class="primary" type="button">リストを読み込む</button>
+      <label class="filebtn">テキストファイルから読み込む<input type="file" id="file" accept=".txt,.csv,text/plain"></label>
+    </div>
+    <p id="loadInfo" class="info" aria-live="polite"></p>
+  </section>
+
+  <section aria-labelledby="h-run">
+    <h2 id="h-run"><span class="n">2</span>英語表記を調べる</h2>
+    <p class="info">Appleの検索は1分あたりの回数に制限があるため、1件あたり約3秒かかります。実行中はこの画面を開いたままにしてください。</p>
+    <div class="actions">
+      <button id="start" class="primary" type="button" disabled>変換を開始</button>
+      <button id="stop" type="button" hidden>停止</button>
+    </div>
+  </section>
+
+  <div id="status" class="status" role="status" hidden>
+    <p id="statusText"></p>
+    <div class="track"><i id="bar"></i></div>
+  </div>
+
+  <section aria-labelledby="h-res">
+    <h2 id="h-res"><span class="n">3</span>結果を確かめる</h2>
+    <div class="filters" id="filters" role="group" aria-label="表示の絞り込み">
+      <button type="button" data-filter="all" aria-pressed="true">すべて</button>
+      <button type="button" data-filter="review" aria-pressed="false">要確認</button>
+      <button type="button" data-filter="checked" aria-pressed="false">出力する</button>
+    </div>
+    <div class="bulk">
+      <button id="selAll" type="button">表示中をすべて選ぶ</button>
+      <button id="selNone" type="button">表示中の選択を外す</button>
+    </div>
+    <p id="empty" class="empty">リストを読み込むと、ここに結果が並びます。英語表記はタップして直接直せます。</p>
+    <ul id="list" class="list"></ul>
+  </section>
+
+  <section aria-labelledby="h-out">
+    <h2 id="h-out"><span class="n">4</span>置換ルールを書き出す</h2>
+    <p class="info">チェックが入っていて、英語表記があるものだけを出力します。現在 <span id="outCount">0</span>件</p>
+    <textarea id="output" readonly aria-label="置換ルールのJSON"></textarea>
+    <div class="actions">
+      <button id="copy" class="primary" type="button" disabled>コピー</button>
+      <button id="save" type="button" disabled>JSONを保存</button>
+    </div>
+  </section>
+
+  <footer>
+    <p>検索にはAppleのiTunes Search APIを使い、ブラウザから直接Appleに問い合わせます。調べた結果と手で直した表記はこのブラウザに保存され、次回同じ名前は検索しません。</p>
+    <button id="clearCache" type="button">保存した結果を消去</button>
+  </footer>
+</main>
+
+<script>
+(() => {
+  'use strict';
+
+  const API = 'https://itunes.apple.com';
+  const INTERVAL = 3200;     // iTunes Search API は1分あたり約20回まで
+  const CHUNK = 10;          // 10件検索するごとに英語表記をまとめて取得
+  const RETRY_WAIT = 60000;  // 制限にかかったときの待ち時間
+  const CACHE_KEY = 'kana2en-cache-v1';
+  const KANA = /[\u30A1-\u30FA]/;
+
+  const STATES = {
+    pending: { label: '未処理',       review: false },
+    match:   { label: '一致',         review: false },
+    guess:   { label: '候補',         review: true  },
+    same:    { label: '英語表記なし', review: true  },
+    none:    { label: '見つからない', review: true  },
+    error:   { label: '取得失敗',     review: true  },
+    manual:  { label: '手入力',       review: false },
+  };
+  const FILTER_LABEL = { all: 'すべて', review: '要確認', checked: '出力する' };
+
+  const $ = (s) => document.querySelector(s);
+  const els = {
+    input: $('#input'), file: $('#file'), onlyKana: $('#onlyKana'), load: $('#load'), loadInfo: $('#loadInfo'),
+    start: $('#start'), stop: $('#stop'), status: $('#status'), statusText: $('#statusText'), bar: $('#bar'),
+    filters: $('#filters'), selAll: $('#selAll'), selNone: $('#selNone'), empty: $('#empty'), list: $('#list'),
+    output: $('#output'), outCount: $('#outCount'), copy: $('#copy'), save: $('#save'), clearCache: $('#clearCache'),
+  };
+
+  let rows = [];
+  let running = false;
+  let stopReq = false;
+  let lastCall = 0;
+  let filter = 'all';
+  let cbSeq = 0;
+  let wakeLock = null;
+  let cache = loadCache();
+
+  /* ---------- 保存 ---------- */
+  function loadCache() {
+    try { return JSON.parse(localStorage.getItem(CACHE_KEY)) || {}; } catch { return {}; }
+  }
+  function saveCache() {
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify(cache)); } catch { /* 保存できなくても続行 */ }
+  }
+
+  /* ---------- 通信 ---------- */
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  async function wait(ms, label) {
+    if (stopReq) throw new Error('stopped');
+    const end = Date.now() + ms;
+    while (Date.now() < end) {
+      if (stopReq) throw new Error('stopped');
+      if (label) els.statusText.textContent = `${label}（あと${Math.ceil((end - Date.now()) / 1000)}秒）`;
+      await sleep(Math.min(500, end - Date.now()));
+    }
+  }
+
+  // iTunes Search API は JSONP（callback 指定）で呼ぶ
+  function jsonp(url) {
+    return new Promise((resolve, reject) => {
+      const name = `__itunes_cb_${Date.now()}_${cbSeq++}`;
+      const script = document.createElement('script');
+      let settled = false;
+      const finish = () => {
+        settled = true;
+        clearTimeout(timer);
+        script.remove();
+        window[name] = () => {};
+        setTimeout(() => { delete window[name]; }, 60000);
+      };
+      const timer = setTimeout(() => { if (!settled) { finish(); reject(new Error('timeout')); } }, 15000);
+      window[name] = (data) => { if (!settled) { finish(); resolve(data); } };
+      script.onerror = () => { if (!settled) { finish(); reject(new Error('network')); } };
+      script.src = `${url}&callback=${name}`;
+      document.head.appendChild(script);
+    });
+  }
+
+  async function call(url) {
+    for (let attempt = 1; ; attempt++) {
+      await wait(lastCall + INTERVAL - Date.now());
+      lastCall = Date.now();
+      try {
+        return await jsonp(url);
+      } catch (e) {
+        if (attempt >= 3) throw e;
+        await wait(RETRY_WAIT, 'Appleから応答がないため、待ってから再試行します');
+      }
+    }
+  }
+
+  function norm(s) {
+    return s.normalize('NFKC').toLowerCase().replace(/[\s・･·=\-‐‑–—_.,、'’"“”!?&+]/g, '');
+  }
+
+  async function searchArtist(kana) {
+    const q = new URLSearchParams({
+      term: kana, country: 'jp', media: 'music', entity: 'musicArtist',
+      attribute: 'artistTerm', lang: 'ja_jp', limit: '10',
+    });
+    const data = await call(`${API}/search?${q}`);
+    const results = (data && data.results) || [];
+    const target = norm(kana);
+    const exact = results.find((r) => norm(r.artistName || '') === target);
+    if (exact) return { status: 'match', id: exact.artistId, apple: exact.artistName };
+    if (results.length) return { status: 'guess', id: results[0].artistId, apple: results[0].artistName };
+    return { status: 'none' };
+  }
+
+  async function lookupEnglish(ids) {
+    const data = await call(`${API}/lookup?id=${ids.join(',')}&country=jp&lang=en_us`);
+    const map = {};
+    for (const r of (data && data.results) || []) {
+      if (r.artistId && r.artistName) map[r.artistId] = r.artistName;
+    }
+    return map;
+  }
+
+  function applyResult(row, res, map) {
+    if (row.state === 'manual') return; // 実行中に手で直したものは上書きしない
+    row.apple = res.apple || '';
+    if (res.status === 'none') {
+      row.state = 'none'; row.en = ''; row.checked = false;
+    } else {
+      const en = (map[res.id] || '').trim();
+      if (!en) { row.state = 'error'; row.en = ''; row.checked = false; return; }
+      if (KANA.test(en)) {
+        row.state = 'same'; row.en = ''; row.checked = false;
+      } else {
+        row.state = res.status; row.en = en; row.checked = res.status === 'match';
+      }
+    }
+    cache[row.kana] = { state: row.state, en: row.en, apple: row.apple };
+    saveCache();
+  }
+
+  /* ---------- 画面 ---------- */
+  function parseInput(text, onlyKana) {
+    const seen = new Set();
+    const out = [];
+    for (const raw of text.split(/\r?\n/)) {
+      const line = raw.trim();
+      if (!line || seen.has(line)) continue;
+      if (onlyKana && !KANA.test(line)) continue;
+      seen.add(line);
+      out.push(line);
+    }
+    return out;
+  }
+
+  function makeRow(row) {
+    const li = document.createElement('li');
+    li.className = 'row';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.className = 'pick';
+    cb.setAttribute('aria-label', `${row.kana} を出力に含める`);
+    const names = document.createElement('div');
+    names.className = 'names';
+    const kana = document.createElement('div');
+    kana.className = 'kana';
+    kana.textContent = row.kana;
+    const en = document.createElement('input');
+    en.type = 'text';
+    en.className = 'en';
+    en.placeholder = '英語表記を入力';
+    en.autocomplete = 'off';
+    en.spellcheck = false;
+    en.setAttribute('autocapitalize', 'off');
+    en.setAttribute('autocorrect', 'off');
+    en.setAttribute('aria-label', `${row.kana} の英語表記`);
+    const note = document.createElement('div');
+    note.className = 'note';
+    const badge = document.createElement('span');
+    badge.className = 'badge';
+    names.append(kana, en, note);
+    li.append(cb, names, badge);
+
+    cb.addEventListener('change', () => {
+      row.checked = cb.checked;
+      refreshControls();
+      refreshOutput();
+    });
+    en.addEventListener('input', () => {
+      row.en = en.value;
+      if (row.en.trim()) {
+        row.state = 'manual';
+        row.checked = true;
+        cache[row.kana] = { state: 'manual', en: row.en.trim(), apple: row.apple || '' };
+      } else {
+        row.checked = false;
+        if (cache[row.kana] && cache[row.kana].state === 'manual') delete cache[row.kana];
+      }
+      saveCache();
+      updateRow(row, true);
+      refreshControls();
+      refreshOutput();
+    });
+
+    Object.assign(row, { el: li, cbEl: cb, enEl: en, noteEl: note, badgeEl: badge });
+    updateRow(row);
+    return li;
+  }
+
+  function updateRow(row, fromInput = false) {
+    row.el.dataset.state = row.state;
+    row.cbEl.checked = !!row.checked;
+    if (!fromInput && row.enEl.value !== (row.en || '')) row.enEl.value = row.en || '';
+    row.badgeEl.textContent = STATES[row.state].label;
+    let note = '';
+    if (row.state === 'guess') note = `完全に一致する名前がありません。近い候補：${row.apple}`;
+    else if (row.state === 'same') note = 'Apple Musicに英語表記がありません。邦楽アーティストかもしれません';
+    else if (row.state === 'none') note = 'Apple Musicで見つかりません。英語表記を手で入力できます';
+    else if (row.state === 'error') note = '取得できませんでした。もう一度「変換を開始」で再取得します';
+    else if (row.state === 'manual' && row.apple) note = `Apple Musicでの表記：${row.apple}`;
+    row.noteEl.textContent = note;
+    row.noteEl.hidden = !note;
+  }
+
+  function visible(row) {
+    if (filter === 'review') return STATES[row.state].review;
+    if (filter === 'checked') return !!row.checked;
+    return true;
+  }
+
+  function applyFilter() {
+    const active = document.activeElement;
+    for (const r of rows) {
+      if (r.el.contains(active)) continue; // 入力中の行は消さない
+      r.el.hidden = !visible(r);
+    }
+  }
+
+  const todoRows = () => rows.filter((r) => r.state === 'pending' || r.state === 'error');
+  const estimateMin = (n) => Math.max(1, Math.ceil((n * INTERVAL * (1 + 1 / CHUNK)) / 60000));
+
+  function refreshControls() {
+    const todo = todoRows().length;
+    els.start.disabled = running || todo === 0;
+    els.start.textContent = running ? '変換中' : (todo ? `変換を開始（${todo}件、約${estimateMin(todo)}分）` : '変換を開始');
+    const count = {
+      all: rows.length,
+      review: rows.filter((r) => STATES[r.state].review).length,
+      checked: rows.filter((r) => r.checked).length,
+    };
+    for (const b of els.filters.querySelectorAll('button')) {
+      b.textContent = `${FILTER_LABEL[b.dataset.filter]}（${count[b.dataset.filter]}）`;
+    }
+    els.empty.hidden = rows.length > 0;
+  }
+
+  function buildRules() {
+    return rows
+      .filter((r) => r.checked && (r.en || '').trim())
+      .map((r) => ({
+        hasOrigTrack: false,
+        origTrack: '',
+        hasOrigArtist: true,
+        origArtist: r.kana,
+        hasOrigAlbum: false,
+        origAlbum: '',
+        hasOrigAlbumArtist: false,
+        origAlbumArtist: '',
+        artist: r.en.trim(),
+        continueMatching: true,
+      }));
+  }
+
+  function refreshOutput() {
+    const rules = buildRules();
+    els.output.value = rules.length ? JSON.stringify(rules, null, 4) : '';
+    els.outCount.textContent = String(rules.length);
+    els.copy.disabled = els.save.disabled = rules.length === 0;
+  }
+
+  function loadList() {
+    if (running) return;
+    const names = parseInput(els.input.value, els.onlyKana.checked);
+    rows = names.map((kana) => {
+      const c = cache[kana];
+      return c
+        ? { kana, state: c.state, en: c.en || '', apple: c.apple || '', checked: (c.state === 'match' || c.state === 'manual') && !!c.en }
+        : { kana, state: 'pending', en: '', apple: '', checked: false };
+    });
+    els.list.replaceChildren(...rows.map(makeRow));
+    const reused = rows.filter((r) => r.state !== 'pending').length;
+    if (names.length) {
+      els.loadInfo.textContent = `${names.length}件を読み込みました` + (reused ? `（うち${reused}件は前回調べた結果を使います）` : '');
+    } else {
+      els.loadInfo.textContent = els.onlyKana.checked ? 'カタカナを含む行がありません。' : 'リストが空です。';
+    }
+    applyFilter();
+    refreshControls();
+    refreshOutput();
+  }
+
+  function setRunning(on) {
+    running = on;
+    els.stop.hidden = !on;
+    els.stop.disabled = false;
+    els.load.disabled = on;
+    els.file.disabled = on;
+    els.clearCache.disabled = on;
+    els.status.hidden = false;
+    refreshControls();
+  }
+
+  async function keepAwake(on) {
+    try {
+      if (on && 'wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
+      else if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
+    } catch { /* 画面の自動消灯を止められない環境もある */ }
+  }
+
+  async function run() {
+    const targets = todoRows();
+    if (running || targets.length === 0) return;
+    stopReq = false;
+    setRunning(true);
+    keepAwake(true);
+    const total = targets.length;
+    let done = 0;
+    const show = (msg) => {
+      els.bar.style.width = `${(done / total) * 100}%`;
+      els.statusText.textContent = `${done} / ${total}件　${msg}　残り約${estimateMin(total - done)}分`;
+    };
+
+    try {
+      for (let i = 0; i < total && !stopReq; i += CHUNK) {
+        const searched = [];
+        for (const row of targets.slice(i, i + CHUNK)) {
+          if (row.state === 'manual') { done++; continue; }
+          show(`検索中：${row.kana}`);
+          try {
+            searched.push({ row, res: await searchArtist(row.kana) });
+          } catch (e) {
+            if (stopReq) throw e;
+            row.state = 'error';
+            row.checked = false;
+            updateRow(row);
+          }
+          done++;
+        }
+        const ids = [...new Set(searched.map((s) => s.res.id).filter(Boolean))];
+        let map = {};
+        if (ids.length) {
+          show('英語表記を取得中');
+          try { map = await lookupEnglish(ids); } catch (e) { if (stopReq) throw e; }
+        }
+        for (const { row, res } of searched) {
+          applyResult(row, res, map);
+          updateRow(row);
+        }
+        applyFilter();
+        refreshControls();
+        refreshOutput();
+      }
+    } catch (e) {
+      if (!stopReq) console.error(e);
+    } finally {
+      keepAwake(false);
+      setRunning(false);
+      const left = todoRows().length;
+      const review = rows.filter((r) => STATES[r.state].review).length;
+      els.bar.style.width = `${Math.min(100, (done / total) * 100)}%`;
+      els.statusText.textContent = stopReq
+        ? `停止しました。未処理・取得失敗が${left}件あります。`
+        : `完了しました。要確認は${review}件です。`;
+      applyFilter();
+      refreshControls();
+      refreshOutput();
+    }
+  }
+
+  async function copyText(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      els.output.select();
+      try { return document.execCommand('copy'); } catch { return false; }
+    }
+  }
+
+  function flash(btn, text) {
+    if (!btn.dataset.label) btn.dataset.label = btn.textContent;
+    btn.textContent = text;
+    setTimeout(() => { btn.textContent = btn.dataset.label; }, 1600);
+  }
+
+  /* ---------- イベント ---------- */
+  els.load.addEventListener('click', loadList);
+  els.file.addEventListener('change', async () => {
+    const f = els.file.files[0];
+    if (!f) return;
+    els.input.value = await f.text();
+    els.file.value = '';
+    loadList();
+  });
+  els.start.addEventListener('click', run);
+  els.stop.addEventListener('click', () => {
+    stopReq = true;
+    els.stop.disabled = true;
+    els.statusText.textContent = '停止しています';
+  });
+
+  els.filters.addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-filter]');
+    if (!b) return;
+    filter = b.dataset.filter;
+    for (const x of els.filters.querySelectorAll('button')) x.setAttribute('aria-pressed', String(x === b));
+    applyFilter();
+  });
+  els.selAll.addEventListener('click', () => {
+    for (const r of rows) if (!r.el.hidden && (r.en || '').trim()) { r.checked = true; updateRow(r); }
+    refreshControls();
+    refreshOutput();
+  });
+  els.selNone.addEventListener('click', () => {
+    for (const r of rows) if (!r.el.hidden) { r.checked = false; updateRow(r); }
+    refreshControls();
+    refreshOutput();
+  });
+
+  els.copy.addEventListener('click', async () => {
+    flash(els.copy, (await copyText(els.output.value)) ? 'コピーしました' : 'コピーできませんでした');
+  });
+  els.save.addEventListener('click', () => {
+    const blob = new Blob([els.output.value], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'artist_rules.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    flash(els.save, '保存しました');
+  });
+  els.clearCache.addEventListener('click', () => {
+    if (!confirm('このブラウザに保存した検索結果と手入力の表記をすべて消去します。よろしいですか？')) return;
+    cache = {};
+    try { localStorage.removeItem(CACHE_KEY); } catch { /* 無視 */ }
+    loadList();
+    flash(els.clearCache, '消去しました');
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (running && document.visibilityState === 'visible') keepAwake(true);
+  });
+  window.addEventListener('beforeunload', (e) => {
+    if (running) { e.preventDefault(); e.returnValue = ''; }
+  });
+
+  refreshControls();
+})();
+</script>
+</body>
+</html>
