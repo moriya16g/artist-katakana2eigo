@@ -3,7 +3,7 @@
 カタカナ表記の海外アーティスト名から、英語表記を調べるWebアプリです。
 Apple Music日本版でカタカナになっているアーティスト名を、英語表記に置き換えるための置換ルール（JSON）を作れます。
 
-**使う:** https://&lt;ユーザー名&gt;.github.io/artist-katakana2eigo/
+**使う:** https://moriya16g.github.io/artist-katakana2eigo/
 
 ## できること
 
