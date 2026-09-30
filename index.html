@@ -115,7 +115,12 @@ input[type=checkbox] { width: 22px; height: 22px; margin: 0; accent-color: var(-
 .note { font-size: 13px; line-height: 1.5; color: var(--muted); margin-top: 5px; }
 .badge { font-size: 12px; font-weight: 500; line-height: 1.4; padding: 3px 8px; border-radius: 6px; white-space: nowrap; margin-top: 1px; background: var(--line); color: var(--ink); }
 .row[data-state="match"] .badge { background: var(--ok-bg); color: var(--ok); }
-.row[data-state="guess"] .badge { background: var(--warn-bg); color: var(--warn); }
+.note .alts-label { display: block; margin-top: 2px; }
+.note .alt {
+  min-height: 34px; padding: 0 12px; margin: 6px 6px 0 0;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--surface);
+  font: 500 14px/1.2 var(--en); color: var(--ink);
+}
 .row[data-state="none"] .badge, .row[data-state="error"] .badge { background: var(--miss-bg); color: var(--miss); }
 .row[data-state="pending"] .badge { background: transparent; color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
 .row[data-state="same"] .badge { background: transparent; color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
@@ -203,17 +208,17 @@ footer button { min-height: 40px; font-size: 14px; border-color: var(--line); co
   const INTERVAL = 3200;     // iTunes Search API は1分あたり約20回まで
   const CHUNK = 10;          // 10件検索するごとに英語表記をまとめて取得
   const RETRY_WAIT = 60000;  // 制限にかかったときの待ち時間
+  const MAX_CANDS = 3;       // 1件あたりに残す候補の数
   const CACHE_KEY = 'kana2en-cache-v1';
   const KANA = /[\u30A1-\u30FA]/;
 
   const STATES = {
     pending: { label: '未処理',       review: false },
-    match:   { label: '一致',         review: false },
-    guess:   { label: '候補',         review: true  },
+    match:   { label: '取得',         review: false },
     same:    { label: '英語表記なし', review: true  },
     none:    { label: '見つからない', review: true  },
     error:   { label: '取得失敗',     review: true  },
-    manual:  { label: '手入力',       review: false },
+    manual:  { label: '修正済み',     review: false },
   };
   const FILTER_LABEL = { all: 'すべて', review: '要確認', checked: '出力する' };
 
@@ -299,12 +304,15 @@ footer button { min-height: 40px; font-size: 14px; border-color: var(--line); co
       attribute: 'artistTerm', lang: 'ja_jp', limit: '10',
     });
     const data = await call(`${API}/search?${q}`);
-    const results = (data && data.results) || [];
+    const results = ((data && data.results) || []).filter((r) => r.artistId);
+    if (results.length === 0) return { status: 'none', ids: [] };
+    // 検索結果の名前は英語表記で返るため、カタカナとの完全一致は通常確認できない。
+    // 検索順位をそのまま使い、万一カタカナ名が返って一致した場合だけ先頭に回す。
     const target = norm(kana);
-    const exact = results.find((r) => norm(r.artistName || '') === target);
-    if (exact) return { status: 'match', id: exact.artistId, apple: exact.artistName };
-    if (results.length) return { status: 'guess', id: results[0].artistId, apple: results[0].artistName };
-    return { status: 'none' };
+    const exact = results.findIndex((r) => norm(r.artistName || '') === target);
+    if (exact > 0) results.unshift(results.splice(exact, 1)[0]);
+    const ids = [...new Set(results.map((r) => r.artistId))].slice(0, MAX_CANDS);
+    return { status: 'found', ids };
   }
 
   async function lookupEnglish(ids) {
@@ -318,19 +326,20 @@ footer button { min-height: 40px; font-size: 14px; border-color: var(--line); co
 
   function applyResult(row, res, map) {
     if (row.state === 'manual') return; // 実行中に手で直したものは上書きしない
-    row.apple = res.apple || '';
     if (res.status === 'none') {
-      row.state = 'none'; row.en = ''; row.checked = false;
+      Object.assign(row, { state: 'none', en: '', cands: [], checked: false });
     } else {
-      const en = (map[res.id] || '').trim();
-      if (!en) { row.state = 'error'; row.en = ''; row.checked = false; return; }
-      if (KANA.test(en)) {
-        row.state = 'same'; row.en = ''; row.checked = false;
-      } else {
-        row.state = res.status; row.en = en; row.checked = res.status === 'match';
+      const names = [...new Set(res.ids.map((id) => (map[id] || '').trim()).filter(Boolean))];
+      const top = names[0];
+      if (!top) {
+        Object.assign(row, { state: 'error', en: '', cands: [], checked: false });
+        return;
       }
+      const cands = names.filter((n) => !KANA.test(n));
+      if (KANA.test(top)) Object.assign(row, { state: 'same', en: '', cands, checked: false });
+      else Object.assign(row, { state: 'match', en: top, cands, checked: true });
     }
-    cache[row.kana] = { state: row.state, en: row.en, apple: row.apple };
+    cache[row.kana] = { state: row.state, en: row.en, cands: row.cands };
     saveCache();
   }
 
@@ -381,25 +390,27 @@ footer button { min-height: 40px; font-size: 14px; border-color: var(--line); co
       refreshControls();
       refreshOutput();
     });
-    en.addEventListener('input', () => {
-      row.en = en.value;
-      if (row.en.trim()) {
-        row.state = 'manual';
-        row.checked = true;
-        cache[row.kana] = { state: 'manual', en: row.en.trim(), apple: row.apple || '' };
-      } else {
-        row.checked = false;
-        if (cache[row.kana] && cache[row.kana].state === 'manual') delete cache[row.kana];
-      }
-      saveCache();
-      updateRow(row, true);
-      refreshControls();
-      refreshOutput();
-    });
+    en.addEventListener('input', () => setManual(row, en.value, true));
 
     Object.assign(row, { el: li, cbEl: cb, enEl: en, noteEl: note, badgeEl: badge });
     updateRow(row);
     return li;
+  }
+
+  function setManual(row, value, fromInput = false) {
+    row.en = value;
+    if (value.trim()) {
+      row.state = 'manual';
+      row.checked = true;
+      cache[row.kana] = { state: 'manual', en: value.trim(), cands: row.cands || [] };
+    } else {
+      row.checked = false;
+      if (cache[row.kana] && cache[row.kana].state === 'manual') delete cache[row.kana];
+    }
+    saveCache();
+    updateRow(row, fromInput);
+    refreshControls();
+    refreshOutput();
   }
 
   function updateRow(row, fromInput = false) {
@@ -407,14 +418,30 @@ footer button { min-height: 40px; font-size: 14px; border-color: var(--line); co
     row.cbEl.checked = !!row.checked;
     if (!fromInput && row.enEl.value !== (row.en || '')) row.enEl.value = row.en || '';
     row.badgeEl.textContent = STATES[row.state].label;
-    let note = '';
-    if (row.state === 'guess') note = `完全に一致する名前がありません。近い候補：${row.apple}`;
-    else if (row.state === 'same') note = 'Apple Musicに英語表記がありません。邦楽アーティストかもしれません';
-    else if (row.state === 'none') note = 'Apple Musicで見つかりません。英語表記を手で入力できます';
-    else if (row.state === 'error') note = '取得できませんでした。もう一度「変換を開始」で再取得します';
-    else if (row.state === 'manual' && row.apple) note = `Apple Musicでの表記：${row.apple}`;
-    row.noteEl.textContent = note;
-    row.noteEl.hidden = !note;
+    const note = row.noteEl;
+    note.replaceChildren();
+    let text = '';
+    if (row.state === 'same') text = 'Apple Musicに英語表記がありません。邦楽アーティストかもしれません';
+    else if (row.state === 'none') text = 'Apple Musicで見つかりません。英語表記を手で入力できます';
+    else if (row.state === 'error') text = '取得できませんでした。もう一度「変換を開始」で再取得します';
+    if (text) note.append(text);
+    const current = (row.en || '').trim();
+    const alts = (row.cands || []).filter((n) => n !== current);
+    if (alts.length) {
+      const label = document.createElement('span');
+      label.className = 'alts-label';
+      label.textContent = 'ほかの候補（タップで差し替え）';
+      note.append(label);
+      for (const name of alts) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'alt';
+        b.textContent = name;
+        b.addEventListener('click', () => setManual(row, name));
+        note.append(b);
+      }
+    }
+    note.hidden = note.childNodes.length === 0;
   }
 
   function visible(row) {
@@ -478,9 +505,12 @@ footer button { min-height: 40px; font-size: 14px; border-color: var(--line); co
     const names = parseInput(els.input.value, els.onlyKana.checked);
     rows = names.map((kana) => {
       const c = cache[kana];
-      return c
-        ? { kana, state: c.state, en: c.en || '', apple: c.apple || '', checked: (c.state === 'match' || c.state === 'manual') && !!c.en }
-        : { kana, state: 'pending', en: '', apple: '', checked: false };
+      if (!c) return { kana, state: 'pending', en: '', cands: [], checked: false };
+      let state = c.state === 'guess' ? 'match' : c.state;
+      if (!STATES[state]) state = 'pending';
+      const en = c.en || '';
+      const cands = c.cands || (en ? [en] : []);
+      return { kana, state, en, cands, checked: (state === 'match' || state === 'manual') && !!en };
     });
     els.list.replaceChildren(...rows.map(makeRow));
     const reused = rows.filter((r) => r.state !== 'pending').length;
@@ -541,7 +571,7 @@ footer button { min-height: 40px; font-size: 14px; border-color: var(--line); co
           }
           done++;
         }
-        const ids = [...new Set(searched.map((s) => s.res.id).filter(Boolean))];
+        const ids = [...new Set(searched.flatMap((s) => s.res.ids))];
         let map = {};
         if (ids.length) {
           show('英語表記を取得中');
