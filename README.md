@@ -1,9 +1,9 @@
-# artist-katakaha2eigo
+# artist-katakana2eigo
 
 カタカナ表記の海外アーティスト名から、英語表記を調べるWebアプリです。
 Apple Music日本版でカタカナになっているアーティスト名を、英語表記に置き換えるための置換ルール（JSON）を作れます。
 
-**使う:** https://moriya16g.github.io/artist-katakaha2eigo/
+**使う:** https://moriya16g.github.io/artist-katakana2eigo/
 
 ## できること
 
@@ -74,7 +74,7 @@ APIはブラウザから直接JSONPで呼び出していて、このアプリ側
 
 1. このリポジトリに `index.html` を置きます。
 2. Settings → Pages で、Source を「Deploy from a branch」、Branch を `main` / `(root)` にして保存します。
-3. 数分後に `https://<ユーザー名>.github.io/artist-katakaha2eigo/` で開けるようになります。
+3. 数分後に `https://<ユーザー名>.github.io/artist-katakana2eigo/` で開けるようになります。
 
 ## 免責
 
