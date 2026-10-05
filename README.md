@@ -74,7 +74,7 @@ APIはブラウザから直接JSONPで呼び出していて、このアプリ側
 
 ## 公開方法（GitHub Pages）
 
-1. このリポジトリに `index.html` を置きます。
+1. このリポジトリに `index.html` と `favicon.svg` を置きます。
 2. Settings → Pages で、Source を「Deploy from a branch」、Branch を `main` / `(root)` にして保存します。
 3. 数分後に `https://<ユーザー名>.github.io/artist-katakana2eigo/` で開けるようになります。
 
